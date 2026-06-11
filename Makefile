@@ -1,6 +1,6 @@
 # Application name and registry configuration
 APP := $(shell basename $(shell git remote get-url origin))
-REGISTRY := slavaslyder
+REGISTRY := slavasly
 VERSION := $(shell git describe --tags --abbrev=0)-$(shell git rev-parse --short HEAD)
 
 # Build configuration
