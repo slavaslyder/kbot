@@ -2,49 +2,43 @@
 name: KBOT-CICD
 
 # Визначимо подію, яка запустить виконання workflow процесу.
-on: push
+on:
+  push:
+    branches:
+      - develop
 # блок задач який налаштовано на запуск завдання на новій ВМ з останньою версією ubuntu
 jobs:
-  ci:
-    name: CI
+  docker:
     runs-on: ubuntu-latest
-# перший крок задачі дозволить запускати на ранері репозиторій із скриптами для виконання дії. 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-# наступним кроком запустимо команду make test, зробимо коміт та подивимось як це працює
-      - name: Run test
-        run: make test
-      - name: Login to Docker Hub
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build&Push
-        env:
-          APP: "kbot"
-          REGISTRY: ${{ vars.DOCKERHUB_USERNAME }}
-        run: make image push
-  cd:
-    name: CD
-    needs: ci
-    runs-on: ubuntu-latest
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 
-    - run: echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Extract Helm values
+        id: helm
+        run: |
+          TAG=$(yq '.image.tag' helm/values.yaml)
+          OS=$(yq '.image.os' helm/values.yaml)
+          ARCH=$(yq '.image.arch' helm/values.yaml)
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "OS=$OS" >> $GITHUB_ENV
+          echo "ARCH=$ARCH" >> $GITHUB_ENV
 
-    - uses: mikefarah/yq@master
-      with:
-        cmd: yq -i '.image.tag=strenv(VERSION)' helm/values.yaml
+      - name: Build Docker image
+        run: |
+          docker build \
+            --platform $OS/$ARCH \
+            -t ghcr.io/slavaslyder/kbot:${TAG}-${OS}-${ARCH} .
 
-    - run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git commit -am "Update image tag to $VERSION"
-        git push
+      - name: Push Docker image
+        run: docker push ghcr.io/slavaslyder/kbot:${TAG}-${OS}-${ARCH}
