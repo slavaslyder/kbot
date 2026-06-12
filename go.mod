@@ -1,4 +1,4 @@
-module github.com/slavaslyder/kbot
+module github.com/den-vasyliev/kbot
 
 go 1.22
 
